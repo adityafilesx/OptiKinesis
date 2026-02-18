@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description"
+        content="Intentix - Production-grade assistive eye-tracking technology for hands-free computer control using gaze and blinks.">
+    <title>Intentix | Command Center</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁️</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Share+Tech+Mono&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+
+</head>
+
+<body>
+    <div id="timer-overlay">5</div>
+
+    <!-- Fatigue Alert Toast (calm, auto-dismiss) -->
+    <div id="fatigue-toast" class="fatigue-toast hidden">
+        <span class="fatigue-icon">😌</span>
+        <span class="fatigue-message">You've been blinking a lot. Please slow down and take a short rest.</span>
+    </div>
+
+    <!-- Voice Confirmation Modal -->
+    <div id="voice-confirm-modal" class="modal-overlay hidden">
+        <div class="voice-modal-content">
+            <h3>🎤 Confirm Voice Action</h3>
+            <p id="voice-confirm-message">Confirm this action?</p>
+            <div class="voice-modal-actions">
+                <button class="btn-confirm" onclick="confirmVoiceAction()" aria-label="Confirm action">✓ YES</button>
+                <button class="btn-deny" onclick="cancelVoiceAction()" aria-label="Cancel action">✗ NO</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reminder Notification -->
+    <div id="reminder-popup" class="reminder-popup hidden">
+        <span class="reminder-icon">⏰</span>
+        <span id="reminder-message">Reminder!</span>
+        <button onclick="dismissReminder()" class="reminder-dismiss" aria-label="Dismiss reminder">OK</button>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal">
+        <div class="modal-content">
+            <h2>SYSTEM CONFIG</h2>
+            <div class="form-group">
+                <label>Emergency Contact Number (+CountryCode)</label>
+                <input type="text" id="conf-contact" placeholder="+919999999999">
+            </div>
+            <div class="form-group">
+                <label>Cursor Scope</label>
+                <select id="conf-scope">
+                    <option value="1.0">Full Screen (100%)</option>
+                    <option value="0.8">Centered Safe Zone (80%)</option>
+                    <option value="0.6">Focused Center (60%)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Blink Sensitivity (Lower = Harder)</label>
+                <input type="number" id="conf-blink" step="0.01" value="0.26" max="0.35" min="0.15">
+            </div>
+            <div class="form-group">
+                <label>Cursor Speed: <span id="speed-value">0.5</span> (Slow → Fast)</label>
+                <input type="range" id="conf-speed" min="0.3" max="1.5" step="0.1" value="0.5" style="width:100%;"
+                    oninput="document.getElementById('speed-value').textContent=this.value">
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" onclick="closeSettings()">CANCEL</button>
+                <button class="btn-save" onclick="saveSettings()">SAVE CONFIG</button>
+            </div>
+        </div>
+    </div>
+
+    <header>
+        <div class="logo">INTENTIX <span style="font-size:0.8rem; color:#555; margin-left:10px;">v1.0</span></div>
+        <div style="display:flex; gap:15px; align-items:center;">
+            <button id="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark/light mode"
+                title="Toggle Theme"><span id="theme-icon">🌙</span></button>
+            <button id="settings-btn" onclick="openSettings()" aria-label="Open system configuration">⚙ CONFIG</button>
+            <div class="status-badge" id="sys-status">
+                <div class="dot"></div>SYSTEM ONLINE
+            </div>
+        </div>
+    </header>
+    <main>
+        <div class="work-area">
+            <textarea id="output-area" placeholder="> SELECT A MODE..." aria-label="Text input area"></textarea>
+            <div id="keyboard" role="group" aria-label="On-screen keyboard">
+                <!-- Row 1: Numbers -->
+                <div class="key" role="button" aria-label="1" tabindex="0" onclick="add('1')">1</div>
+                <div class="key" role="button" aria-label="2" tabindex="0" onclick="add('2')">2</div>
+                <div class="key" role="button" aria-label="3" tabindex="0" onclick="add('3')">3</div>
+                <div class="key" role="button" aria-label="4" tabindex="0" onclick="add('4')">4</div>
+                <div class="key" role="button" aria-label="5" tabindex="0" onclick="add('5')">5</div>
+                <div class="key" role="button" aria-label="6" tabindex="0" onclick="add('6')">6</div>
+                <div class="key" role="button" aria-label="7" tabindex="0" onclick="add('7')">7</div>
+                <div class="key" role="button" aria-label="8" tabindex="0" onclick="add('8')">8</div>
+                <div class="key" role="button" aria-label="9" tabindex="0" onclick="add('9')">9</div>
+                <div class="key" role="button" aria-label="0" tabindex="0" onclick="add('0')">0</div>
+                <!-- Row 2: QWERTY top -->
+                <div class="key" role="button" aria-label="Q" tabindex="0" onclick="add('Q')">Q</div>
+                <div class="key" role="button" aria-label="W" tabindex="0" onclick="add('W')">W</div>
+                <div class="key" role="button" aria-label="E" tabindex="0" onclick="add('E')">E</div>
+                <div class="key" role="button" aria-label="R" tabindex="0" onclick="add('R')">R</div>
+                <div class="key" role="button" aria-label="T" tabindex="0" onclick="add('T')">T</div>
+                <div class="key" role="button" aria-label="Y" tabindex="0" onclick="add('Y')">Y</div>
+                <div class="key" role="button" aria-label="U" tabindex="0" onclick="add('U')">U</div>
+                <div class="key" role="button" aria-label="I" tabindex="0" onclick="add('I')">I</div>
+                <div class="key" role="button" aria-label="O" tabindex="0" onclick="add('O')">O</div>
+                <div class="key" role="button" aria-label="P" tabindex="0" onclick="add('P')">P</div>
+                <!-- Row 3: Home row -->
+                <div class="key" role="button" aria-label="A" tabindex="0" onclick="add('A')">A</div>
+                <div class="key" role="button" aria-label="S" tabindex="0" onclick="add('S')">S</div>
+                <div class="key" role="button" aria-label="D" tabindex="0" onclick="add('D')">D</div>
+                <div class="key" role="button" aria-label="F" tabindex="0" onclick="add('F')">F</div>
+                <div class="key" role="button" aria-label="G" tabindex="0" onclick="add('G')">G</div>
+                <div class="key" role="button" aria-label="H" tabindex="0" onclick="add('H')">H</div>
+                <div class="key" role="button" aria-label="J" tabindex="0" onclick="add('J')">J</div>
+                <div class="key" role="button" aria-label="K" tabindex="0" onclick="add('K')">K</div>
+                <div class="key" role="button" aria-label="L" tabindex="0" onclick="add('L')">L</div>
+                <div class="key" role="button" aria-label="Period" tabindex="0" onclick="add('.')">.</div>
+                <!-- Row 4: Bottom alpha -->
+                <div class="key" role="button" aria-label="Z" tabindex="0" onclick="add('Z')">Z</div>
+                <div class="key" role="button" aria-label="X" tabindex="0" onclick="add('X')">X</div>
+                <div class="key" role="button" aria-label="C" tabindex="0" onclick="add('C')">C</div>
+                <div class="key" role="button" aria-label="V" tabindex="0" onclick="add('V')">V</div>
+                <div class="key" role="button" aria-label="B" tabindex="0" onclick="add('B')">B</div>
+                <div class="key" role="button" aria-label="N" tabindex="0" onclick="add('N')">N</div>
+                <div class="key" role="button" aria-label="M" tabindex="0" onclick="add('M')">M</div>
+                <div class="key" role="button" aria-label="Comma" tabindex="0" onclick="add(',')">,</div>
+                <div class="key backspace span-2" role="button" aria-label="Backspace" tabindex="0" onclick="back()">
+                    BACK</div>
+                <!-- Row 5: Utility -->
+                <div class="key clear span-2" role="button" aria-label="Clear all text" tabindex="0" onclick="clr()">CLR
+                </div>
+                <div class="key nav-key span-2" role="button" aria-label="Move cursor left" tabindex="0"
+                    onclick="moveCursor(-1)">&lt;</div>
+                <div class="key span-4" role="button" aria-label="Space" tabindex="0" onclick="add(' ')">SPACE</div>
+                <div class="key nav-key span-2" role="button" aria-label="Move cursor right" tabindex="0"
+                    onclick="moveCursor(1)">&gt;</div>
+            </div>
+        </div>
+        <div class="sidebar">
+            <div class="camera-card"><img id="camera-feed" src="{{ url_for('video_feed') }}" alt="Live camera feed">
+            </div>
+            <div class="action-deck">
+                <h3 style="color: var(--primary-color); margin:0; padding-bottom:6px;">// ACTIONS</h3>
+                <button class="action-btn" onclick="sendAction('google')" aria-label="Search Google with typed text">
+                    <span class="btn-content">
+                        <svg class="btn-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path fill="currentColor"
+                                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                            <path fill="currentColor"
+                                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                            <path fill="currentColor"
+                                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                            <path fill="currentColor"
+                                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                        </svg>
+                        SEARCH GOOGLE
+                    </span>
+                </button>
+                <button class="action-btn" onclick="sendAction('youtube')" aria-label="Search YouTube with typed text">
+                    <span class="btn-content">
+                        <svg class="btn-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path fill="currentColor"
+                                d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                        </svg>
+                        SEARCH YOUTUBE
+                    </span>
+                </button>
+                <button class="action-btn" onclick="sendAction('type_external')"
+                    style="color: #ff9800; border-color: #ff9800;" aria-label="Type text to external application">TYPE
+                    EXTERNAL <span>⌨</span></button>
+
+                <h3 style="color: var(--danger-color); margin:12px 0 0; padding-bottom:6px;">// EMERGENCY</h3>
+                <div class="emergency-group">
+                    <button class="action-btn sos-btn" onclick="alert('Configure Number first!')" id="btn-msg"
+                        aria-label="Send emergency message to contact">MSG CONTACT <span>💬</span></button>
+
+                    <button class="action-btn sos-btn" onclick="sendAction('emergency_call')" id="btn-dial"
+                        aria-label="Call emergency contact">EMERGENCY CONTACT <span>📞</span></button>
+
+                    <button class="action-btn sos-btn" onclick="confirmAction('emergency_police', this)"
+                        aria-label="Dial 100 for police"><span>⚠️</span> DIAL 100 (POLICE)</button>
+                    <button class="action-btn sos-btn" onclick="confirmAction('emergency_ambulance', this)"
+                        aria-label="Dial 112 for ambulance"><span>⚠️</span> DIAL 112 (AMB)</button>
+                </div>
+
+                <h3 style="color: var(--voice-purple); margin:12px 0 0; padding-bottom:6px;">// VOICE CONTROL</h3>
+                <div class="voice-section">
+                    <button id="voice-btn" class="action-btn voice-btn" onclick="toggleVoice()" data-state="idle"
+                        aria-label="Toggle voice control">
+                        <span id="voice-icon">🎤</span> <span id="voice-label">START VOICE</span>
+                    </button>
+                    <div id="voice-status" class="voice-status" aria-live="polite">
+                        <span id="voice-indicator" class="voice-status-indicator idle"></span>
+                        <span id="voice-status-text">Say a command...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <audio id="click-sound" src="{{ url_for('static', filename='sounds/click.mp3') }}"></audio>
+    <script>
+        const textarea = document.getElementById('output-area');
+        const timerOverlay = document.getElementById('timer-overlay');
+        const statusBadge = document.getElementById('sys-status');
+
+        const clickSound = document.getElementById('click-sound');
+
+        function playClick() {
+            if (!clickSound) return;
+            clickSound.currentTime = 0; // allows rapid clicking
+            clickSound.play().catch(() => {}); // prevents console errors
+        }
+
+
+        function add(char) { const s = textarea.selectionStart, e = textarea.selectionEnd, t = textarea.value; textarea.value = t.substring(0, s) + char + t.substring(e); textarea.selectionStart = textarea.selectionEnd = s + 1; textarea.focus(); }
+        function back() { const s = textarea.selectionStart, e = textarea.selectionEnd, t = textarea.value; if (s !== e) { textarea.value = t.substring(0, s) + t.substring(e); textarea.selectionStart = textarea.selectionEnd = s; } else if (s > 0) { textarea.value = t.substring(0, s - 1) + t.substring(e); textarea.selectionStart = textarea.selectionEnd = s - 1; } textarea.focus(); }
+        function clr() { textarea.value = ''; textarea.focus(); }
+        function moveCursor(d) { const p = textarea.selectionStart; textarea.setSelectionRange(p + d, p + d); textarea.focus(); }
+
+        // Allow keyboard Enter on .key divs for accessibility
+        document.querySelectorAll('.key').forEach(k => {
+            k.addEventListener('click', playClick);
+            k.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); k.click(); }
+            });
+        });
+
+        // ===========================================
+        // BLINK LOCK STATE MANAGEMENT
+        // Call lockKey(el) on blink-stage-2 to show locked state
+        // Call unlockKey(el) after action is confirmed
+        // ===========================================
+        function lockKey(el) {
+            el.classList.add('locked');
+        }
+        function unlockKey(el) {
+            el.classList.remove('locked');
+        }
+        function unlockAllKeys() {
+            document.querySelectorAll('.key.locked').forEach(k => k.classList.remove('locked'));
+        }
+
+        function sendAction(a) {
+            const t = textarea.value;
+            if (a === 'type_external') startCountdown();
+            if (a.includes('emergency') || a === 'dial_contact') {
+                const o = statusBadge.innerHTML; statusBadge.style.color = '#ff3b30'; statusBadge.style.borderColor = '#ff3b30'; statusBadge.innerHTML = '⚠ EXECUTING...';
+                setTimeout(() => { statusBadge.style.color = '#ccc'; statusBadge.style.borderColor = '#333'; statusBadge.innerHTML = o; }, 5000);
+            }
+            fetch('/perform_action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: a, text: t }) });
+        }
+
+        function confirmAction(action, el) {
+            if (el) {
+                el.classList.add('confirming');
+            }
+            const confirmed = confirm("CONFIRM EMERGENCY ACTION? This will dial immediately.");
+            if (el) {
+                el.classList.remove('confirming');
+                if (confirmed) {
+                    el.classList.add('confirmed');
+                    setTimeout(() => el.classList.remove('confirmed'), 3000);
+                }
+            }
+            if (confirmed) {
+                sendAction(action);
+            }
+        }
+
+        // Settings Logic
+        const modal = document.getElementById('settings-modal');
+        const contactInput = document.getElementById('conf-contact');
+        const scopeInput = document.getElementById('conf-scope');
+        const blinkInput = document.getElementById('conf-blink');
+        const speedInput = document.getElementById('conf-speed');
+
+        function openSettings() { modal.style.display = 'flex'; }
+        function closeSettings() { modal.style.display = 'none'; }
+
+        function saveSettings() {
+            const data = {
+                emergency_contact: contactInput.value,
+                cursor_scope: scopeInput.value,
+                blink_sensitivity: blinkInput.value,
+                cursor_speed: parseFloat(speedInput.value)
+            };
+
+            fetch('/update_settings', {
+                method: 'POST', body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' }
+            }).then(r => r.json()).then(d => {
+                alert('Configuration Saved!');
+                closeSettings();
+                updateEmergencyButtons(data.emergency_contact);
+            });
+        }
+
+        function updateEmergencyButtons(contact) {
+            const btnMsg = document.getElementById('btn-msg');
+            const btnDial = document.getElementById('btn-dial');
+            if (contact && contact.length > 5) {
+                btnMsg.onclick = () => sendAction('emergency_contact');
+                btnMsg.style.borderColor = '#662020'; btnMsg.style.color = '#e05545';
+
+                btnDial.onclick = () => sendAction('emergency_call');
+                btnDial.style.borderColor = '#662020'; btnDial.style.color = '#e05545';
+            }
+        }
+
+        function startCountdown() { let c = 5; timerOverlay.style.display = 'block'; timerOverlay.innerText = c; const i = setInterval(() => { c--; if (c > 0) timerOverlay.innerText = c; else { clearInterval(i); timerOverlay.style.display = 'none'; } }, 1000); }
+
+        // ===========================================
+        // FATIGUE MONITORING SYSTEM
+        // ===========================================
+        const fatigueToast = document.getElementById('fatigue-toast');
+        let lastFatigueState = false;
+        let fatigueToastTimeout = null;
+
+        function checkFatigueStatus() {
+            fetch('/fatigue_status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.should_show_toast && !lastFatigueState) {
+                        showFatigueToast();
+                    }
+                    lastFatigueState = data.is_fatigued;
+                })
+                .catch(err => console.log('Fatigue check failed:', err));
+        }
+
+        function showFatigueToast() {
+            fatigueToast.classList.remove('hidden');
+            fatigueToast.classList.add('visible');
+
+            if (fatigueToastTimeout) clearTimeout(fatigueToastTimeout);
+            fatigueToastTimeout = setTimeout(() => {
+                fatigueToast.classList.remove('visible');
+                fatigueToast.classList.add('hidden');
+            }, 5000);
+        }
+
+        setInterval(checkFatigueStatus, 3000);
+
+        // ===========================================
+        // VOICE COMMAND SYSTEM (Web Speech API)
+        // With visual state management
+        // ===========================================
+        const voiceBtn = document.getElementById('voice-btn');
+        const voiceIcon = document.getElementById('voice-icon');
+        const voiceLabel = document.getElementById('voice-label');
+        const voiceStatusEl = document.getElementById('voice-status');
+        const voiceStatusText = document.getElementById('voice-status-text');
+        const voiceIndicator = document.getElementById('voice-indicator');
+        const voiceConfirmModal = document.getElementById('voice-confirm-modal');
+        const voiceConfirmMessage = document.getElementById('voice-confirm-message');
+
+        let recognition = null;
+        let isListening = false;
+        let continuousMode = true;
+        let micPermissionGranted = false;
+
+        // Voice state management
+        function setVoiceState(state) {
+            voiceBtn.dataset.state = state;
+            voiceBtn.classList.remove('listening', 'processing', 'executed');
+            voiceIndicator.classList.remove('idle', 'listening', 'processing', 'executed');
+
+            switch (state) {
+                case 'idle':
+                    voiceIndicator.classList.add('idle');
+                    break;
+                case 'listening':
+                    voiceBtn.classList.add('listening');
+                    voiceIndicator.classList.add('listening');
+                    break;
+                case 'processing':
+                    voiceBtn.classList.add('processing');
+                    voiceIndicator.classList.add('processing');
+                    break;
+                case 'executed':
+                    voiceBtn.classList.add('executed');
+                    voiceIndicator.classList.add('executed');
+                    // Auto-return to idle after 2s
+                    setTimeout(() => {
+                        if (voiceBtn.dataset.state === 'executed') {
+                            setVoiceState('idle');
+                        }
+                    }, 2000);
+                    break;
+            }
+        }
+
+        function setVoiceStatus(text) {
+            voiceStatusText.textContent = text;
+        }
+
+        // Browser compatibility check
+        function checkBrowserCompatibility() {
+            const isFirefox = /Firefox/.test(navigator.userAgent);
+            const isSafari = /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent);
+
+            if (isFirefox) {
+                setVoiceStatus('⚠️ Firefox has limited voice support. Use Chrome/Edge for best results.');
+                return false;
+            }
+            if (isSafari) {
+                setVoiceStatus('⚠️ Safari may require enabling Web Speech API in settings.');
+            }
+            return true;
+        }
+
+        // Request microphone permission
+        async function requestMicPermission() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                stream.getTracks().forEach(track => track.stop());
+                micPermissionGranted = true;
+                setVoiceStatus('🎤 Microphone ready. Click START VOICE to begin.');
+                voiceBtn.disabled = false;
+                return true;
+            } catch (err) {
+                console.error('Microphone permission error:', err);
+                micPermissionGranted = false;
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    setVoiceStatus('❌ Microphone access denied. Allow in browser settings and refresh.');
+                } else if (err.name === 'NotFoundError') {
+                    setVoiceStatus('❌ No microphone found. Please connect a microphone.');
+                } else {
+                    setVoiceStatus('❌ Microphone error: ' + err.message);
+                }
+                voiceBtn.disabled = true;
+                return false;
+            }
+        }
+
+        // Initialize Web Speech API
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            checkBrowserCompatibility();
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.continuous = false;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+            recognition.maxAlternatives = 1;
+
+            recognition.onstart = function () {
+                isListening = true;
+                setVoiceState('listening');
+                voiceIcon.textContent = '🔴';
+                voiceLabel.textContent = 'LISTENING...';
+                setVoiceStatus('🎧 Speak now... (e.g., "search cats on google")');
+            };
+
+            recognition.onresult = function (event) {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript;
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                if (interimTranscript) {
+                    setVoiceStatus('💬 "' + interimTranscript + '"...');
+                }
+
+                if (finalTranscript) {
+                    processVoiceCommand(finalTranscript);
+                }
+            };
+
+            recognition.onerror = function (event) {
+                console.error('Speech recognition error:', event.error);
+
+                switch (event.error) {
+                    case 'not-allowed':
+                        setVoiceStatus('❌ Microphone access denied. Click 🔒 icon in address bar to allow.');
+                        voiceBtn.disabled = true;
+                        break;
+                    case 'no-speech':
+                        setVoiceStatus('🔇 No speech detected. Try again.');
+                        break;
+                    case 'audio-capture':
+                        setVoiceStatus('❌ No microphone available. Please connect a microphone.');
+                        break;
+                    case 'network':
+                        setVoiceStatus('🌐 Network error. Check your internet connection.');
+                        break;
+                    case 'aborted':
+                        setVoiceStatus('⏹ Voice input stopped.');
+                        break;
+                    default:
+                        setVoiceStatus('⚠️ Error: ' + event.error);
+                }
+                stopListening();
+            };
+
+            recognition.onend = function () {
+                const wasListening = isListening;
+                stopListening();
+
+                if (continuousMode && wasListening && micPermissionGranted) {
+                    setTimeout(() => {
+                        if (continuousMode) {
+                            setVoiceStatus('🔄 Ready for next command. Click START VOICE.');
+                        }
+                    }, 500);
+                }
+            };
+
+            setTimeout(() => requestMicPermission(), 1000);
+
+        } else {
+            setVoiceStatus('❌ Voice not supported. Please use Chrome or Edge browser.');
+            voiceBtn.disabled = true;
+        }
+
+        function toggleVoice() {
+            if (isListening) {
+                continuousMode = false;
+                stopListening();
+            } else {
+                continuousMode = true;
+                startListening();
+            }
+        }
+
+        async function startListening() {
+            if (!micPermissionGranted) {
+                const granted = await requestMicPermission();
+                if (!granted) return;
+            }
+
+            if (recognition) {
+                try {
+                    recognition.start();
+                } catch (e) {
+                    if (e.name === 'InvalidStateError') {
+                        recognition.stop();
+                        setTimeout(() => recognition.start(), 100);
+                    } else {
+                        console.error('Recognition start error:', e);
+                        setVoiceStatus('⚠️ Could not start voice recognition.');
+                    }
+                }
+            }
+        }
+
+        function stopListening() {
+            isListening = false;
+            setVoiceState('idle');
+            voiceIcon.textContent = '🎤';
+            voiceLabel.textContent = 'START VOICE';
+            if (recognition) {
+                try { recognition.stop(); } catch (e) { }
+            }
+        }
+
+        function processVoiceCommand(text) {
+            setVoiceState('processing');
+            voiceIcon.textContent = '⏳';
+            voiceLabel.textContent = 'PROCESSING...';
+            setVoiceStatus('⏳ Processing: "' + text + '"');
+
+            fetch('/voice_command', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text })
+            })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'pending_confirmation') {
+                        voiceConfirmMessage.textContent = data.description;
+                        voiceConfirmModal.classList.remove('hidden');
+                        setVoiceStatus('❓ Confirm action below...');
+                        setVoiceState('idle');
+                    } else if (data.status === 'success') {
+                        setVoiceStatus('✅ ' + data.message);
+                        setVoiceState('executed');
+                    } else if (data.status === 'unknown') {
+                        setVoiceStatus('❓ Unknown command. Try: "search X on google", "youtube X", "set reminder in 5 minutes"');
+                        setVoiceState('idle');
+                    } else if (data.status === 'error') {
+                        setVoiceStatus('❌ ' + (data.message || 'Command failed'));
+                        setVoiceState('idle');
+                    } else {
+                        setVoiceStatus(data.message || 'Command processed');
+                        setVoiceState('executed');
+                    }
+                    voiceIcon.textContent = '🎤';
+                    voiceLabel.textContent = 'START VOICE';
+                })
+                .catch(err => {
+                    setVoiceStatus('❌ Error processing command. Check server connection.');
+                    setVoiceState('idle');
+                    voiceIcon.textContent = '🎤';
+                    voiceLabel.textContent = 'START VOICE';
+                    console.error(err);
+                });
+        }
+
+        function confirmVoiceAction() {
+            voiceConfirmModal.classList.add('hidden');
+            fetch('/confirm_action', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    setVoiceStatus('✅ ' + (data.message || 'Action confirmed'));
+                    setVoiceState('executed');
+                });
+        }
+
+        function cancelVoiceAction() {
+            voiceConfirmModal.classList.add('hidden');
+            fetch('/cancel_action', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    setVoiceStatus('❌ ' + (data.message || 'Action cancelled'));
+                    setVoiceState('idle');
+                });
+        }
+
+        // Reminder popup handling
+        const reminderPopup = document.getElementById('reminder-popup');
+        const reminderMessage = document.getElementById('reminder-message');
+
+        function showReminder(message) {
+            reminderMessage.textContent = message || 'Reminder!';
+            reminderPopup.classList.remove('hidden');
+        }
+
+        function dismissReminder() {
+            reminderPopup.classList.add('hidden');
+        }
+
+        // ===========================================
+        // THEME TOGGLE SYSTEM
+        // ===========================================
+        function toggleTheme() {
+            const body = document.body;
+            const themeIcon = document.getElementById('theme-icon');
+            const currentTheme = body.getAttribute('data-theme');
+
+            if (currentTheme === 'light') {
+                body.setAttribute('data-theme', 'dark');
+                themeIcon.textContent = '🌙';
+                localStorage.setItem('intentix-theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                themeIcon.textContent = '☀️';
+                localStorage.setItem('intentix-theme', 'light');
+            }
+        }
+
+        // Load saved theme on page load
+        function loadTheme() {
+            const savedTheme = localStorage.getItem('intentix-theme') || 'dark';
+            const themeIcon = document.getElementById('theme-icon');
+            document.body.setAttribute('data-theme', savedTheme);
+            themeIcon.textContent = savedTheme === 'light' ? '☀️' : '🌙';
+        }
+
+        window.onload = () => {
+            loadTheme();
+            textarea.focus();
+            checkFatigueStatus();
+        };
+    </script>
+</body>
+
+</html>
